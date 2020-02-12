@@ -1,0 +1,11 @@
+;*******************************************
+;** Default Script - Empty Version       ***
+;** Apr. 28 1999                         ***
+;*******************************************
+
+CANCEL_MSG;
+;MSG_ACK "This Channel has not been set-up.\nDEFAULT.PSF";
+
+LBL theend;
+VAR RECEIVED="Script Complete";
+END;

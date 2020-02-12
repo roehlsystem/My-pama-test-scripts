@@ -1,0 +1,593 @@
+;**********************************************
+;** PAMA Master Script	(Pama.msf)          ***
+;** Nov 16, 2004                            ***
+;** Requires PamaNT v. 3.20.012 or newer    ***
+;*************************************************************************
+;** Auxiliary Variables [default]                                       **
+;** None [none]	                                                        **
+;** Revisions:                                                          **
+;**    Apr 01, 2005 - Added PCC_PRODUCTFILENAME support, cleaned up,    **
+;**                   removed access to BypassLight and StackLight      **
+;**    Nov 16, 2004 - Added BYPASS support not included in ver. 3.1     **
+;**                   Replaced 3.0 eOPamaBypass with BypassLight        **
+;**    Aug 31, 2004 - Updated Script for Pama ver. 3.20                 **
+;**    Feb 13, 2003 - increased the e-mail notification threshold       **
+;**    Oct 14, 2002 - added lines to support Tartus Communication check.**
+;**    Oct 02, 2002 - added lines to indicate status of Auto-registration*
+;**    Sep 23, 2002 - added Syncro-variable for Masterscript setup      **
+;**    Apr 16, 2002 - added Script Revision logging                     **
+;**    Mar 26, 2002 - added _TERMINATE routine to turn off stack lights and horn **
+;*************************************************************************
+PERSIST sVersionReporter,"",1;
+VAR sVersionReporter = "";
+VAR nNULLReturn=0;					-->This variable is used when the variable returned by
+									;   the subroutine is not needed.
+VAR nGBL_PamaMaster_Revision=20050401,GLOBAL;
+
+;****************************************************************
+;** Global variable Definition **********************************
+;****************************************************************
+VAR ON=1,GLOBAL;
+VAR OFF=0,GLOBAL;
+VAR STROBE=2,GLOBAL;
+VAR OK=1,GLOBAL;
+VAR BAD=0,GLOBAL;
+GOSUB pGBL_InitdBaseVars,nNULLReturn,"";
+
+;****************************************************************
+;** I/O Definition **********************************************
+;****************************************************************
+INPUTOPEN eIBypass,GLOBAL;					-->PLC bypass input signal
+;;;OUTPUTOPEN BypassLight,GLOBAL;				-->Bypass light output signal
+OUTPUTOPEN eOGreenLight,GLOBAL;				-->Green Light output
+;;;OUTPUTOPEN StackLight,GLOBAL;				-->Get Access to the StackLight status.
+INPUTOPEN eMS_EmailMsg,SIGNAL,1;			-->Watch the E-mail warning
+VAR eOGreenLight=ON;
+
+VAR iGreenCnt = 0;
+VAR iGreenState = 0;
+VAR iOldGreenState = -1;
+
+;****************************************************************
+;** Local Variable Definition ***********************************
+;****************************************************************
+VAR sToggleBypass = 0;
+VAR nWakeUpTimer=2;						-->Contains the MailLoop wait time for the event handler.
+VAR nOutputIndexSave=0;					-->Holds the number of Outputs currently set to Strobe.
+VAR nEmailNotification=OFF;				-->Indicates whether or not to give E-mail notification.
+VAR nEmailStrobeCount=0;				-->Timing of Email siren.
+VAR nOriginalStackLightState=OFF;			-->Used in E-mail Strobe.
+VAR nEmailStrobeActivated=OFF;				-->Used in E-mail Strobe.
+VAR sRootPath="C:/Program Files/Hewlett-Packard IJBU/Pama/";
+VAR eMS_EmailMsg="SomethingTHATwillNEVERbeTYPED";
+
+;****************************************************************
+;** One-Time Subroutine Executions *******************************
+;****************************************************************
+;GOSUB pGBL_TARTUS_Remote_Handshake,nNULLReturn,"";
+VAR s_PamaMaster_Revision=numtostr(nGBL_PamaMaster_Revision);
+GOSUB pGBL_ScriptRegister, sVersionReporter, "PAMA_MSF", s_PamaMaster_Revision;
+;GOSUB pTartusConnCheck, nNULLReturn,"";		-->Check Tartus Connection
+VAR sGBL_PMS_VarDef = "Done", GLOBAL;			-->Used to syncronize other scripts that use Master Script variables.
+
+;****************************************************************
+;** Main Loop ***************************************************
+;****************************************************************
+LBL pMainLoop;
+VAR nIndex=0;
+WAITFORANY nIndex,nWakeUpTimer,eIBypass,EMAIL,eMS_EmailMsg; 	-->Waits for either the Bypass input of for a timeout.
+IF (nIndex=0)(GOSUB pCycleChecks,nNULLReturn,"");
+IF (nIndex=1)(GOSUB pBypassHandler,nNULLReturn,"");
+IF (nIndex=2)(GOSUB pEmailHandler,nNULLReturn,EMAIL);
+IF (nIndex=3)(GOSUB pEmailMsgHandler,nNULLReturn,eMS_EmailMsg);
+GOTO pMainLoop
+
+END;
+
+;****************************************************************
+;** Local Subroutines *******************************************
+;****************************************************************
+LBL _TERMINATE,sPARM_Nothing;
+;;;  VAR BypassLight=OFF;						--> Make sure stacklights and horn turns off at STOP
+  VAR eOGreenLight=OFF;
+;;;  VAR StackLight=OFF;
+  RETURN OK;
+
+LBL pTartusConnCheck,sPARM_Nothing;
+	VAR nFound=0;
+	VAR nCounter="0";
+	VAR nFound=VERSION;
+	STRTONUM nFound;
+	IF (nFound<5)(RETURN OK);
+	VAR sFilename="c:\\data\\EmailCycleCheck.txt"
+	VAR sEmailBody="VAR nFound=0;\nVAR sFilename=\"c:\\\\data\\\\EmailCycleCheck.txt\";\n";
+	VAR sEmailBody=sEmailBody+"VAR sWaitRun=\"WAIT \"+numtostr(int((70*random())/32767)+30);\nRUN sWaitRun;\n";
+	VAR sEmailBody=sEmailBody+"VAR STATUS=\"Tartus Link Verified\";\n"
+	VAR sEmailBody=sEmailBody+"FILEINFO nFound,sFilename,1;\nIF (nFound=0)(GOTO pEnd);\n"
+	VAR sEmailBody=sEmailBody+"VAR sDOScmd="+chr(34)+"/c del "+chr(34)+"+chr(34)+sFilename+chr(34);\n";
+	VAR sEmailBody=sEmailBody+"FILEINFO nFound,"+chr(34)+sRootPath+"Scripts/FileClean.vbs"+chr(34)+",1;\n";
+	VAR sEmailBody=sEmailBody+"IF (nFound=1)(EXEC "+chr(34)+sRootPath+"Scripts/FileClean.vbs"+chr(34)+",sFilename);\n";
+	VAR sEmailBody=sEmailBody+"IF (nFound=0)(EXEC "+chr(34)+"cmd"+chr(34)+",sDOScmd);\n";
+	VAR sEmailBody=sEmailBody+"LBL pEnd;\nEND;\n";
+
+	VAR sEmailSub="Tartus_Link_Check";
+	VAR sTCC_Result;
+	RUN "TM 3,RETURNADDRESS,sEmailSub,sEmailBody";		-->Done as a RUN to hide the RETURNADDRESS variable(ver.5)
+	VAR STATUS="Tartus Connection check sent...";
+    	FILEINFO nFound,sFilename,1;					-->Check if PalletProduct.txt exists
+    	IF (nFound=0)(WRITEFILE sTCC_Result,sFilename,"1","CREATE","TEXT");		-->If doesn't exist, then create it (ver.7)
+	READFILE nCounter,sFilename,1,EOF;					-->Return contents of file, should always succeed.
+	STRTONUM nCounter;
+	IF (nCounter>3)(GOTO pWarnOper);
+	INC nCounter;
+	NUMTOSTR nCounter;
+	WRITEFILE sTCC_Result,sFilename,nCounter,"CREATE","TEXT"; -->(ver.7)
+	VAR STATUS="Tartus Connection tested.";
+	RETURN OK;
+	
+  LBL pWarnOper;
+	INPUTOPEN eMS_TartusMsg,SIGNAL,1;
+;;;	VAR StackLight=ON;
+	CANCEL_MSG;
+	MSG_SIGNAL "ERROR!! Connection Lost with TARTUS",eMS_TartusMsg;
+	VAR STATUS="ERROR!! Connection Lost with TARTUS";
+	WAIT 10;
+;;;	VAR StackLight=OFF;
+	RETURN OK;
+
+
+LBL pCycleChecks,sPARM_Nothing;
+
+IF (LINETYPE ! "PCC")(GOTO pDoNotPulseGreen);		--> notify user Pama running but waiting for traceability scan
+ IF (PCC_PRODUCTFILENAME ! "")(GOTO pProductDefined);	--> by flashing green light slowly - KDM 01-Apr-2005
+  INC iGreenCnt;	--> 0.2 sec tick
+  IF (iGreenCnt = 10)(VAR iGreenState = 0);
+  IF (iGreenCnt = 20)(VAR iGreenState = 1);
+  IF (iGreenCnt = 20)(VAR iGreenCnt = 0);
+  IF (iGreenState = iOldGreenState)(GOTO pDoNotPulseGreen);
+   VAR iOldGreenState = iGreenState;
+   VAR eOGreenLight = iGreenState;
+   GOTO pDoNotPulseGreen;
+  LBL pProductDefined;
+   IF (iGreenState = 1)(GOTO pDoNotPulseGreen);
+   VAR iGreenState = 1;
+   VAR eOGreenLight = 1;
+LBL pDoNotPulseGreen;
+
+  VAR iResult=BAD;
+  GOSUB pOutputStrober,iResult,0;				-->Strobe any Outputs that have been previously set.
+  IF (nEmailNotification=ON)(GOSUB pEmailStrobe,nNULLReturn,"");
+  IF (nEmailStrobeActivated!ON)(RETURN OK);
+  IF (nEmailNotification!ON)(GOSUB pEmailStrobe,nNULLReturn,""); --> Finish Current E-mail Strobe if cleared in the middle.
+  RETURN OK;							-->Return to MainLoop
+
+LBL pBypassHandler,sPARM_Nothing;
+  IF (eIBypass=0)(VAR BYPASS=OFF);				-->Turn OFF Bypass Light
+  IF (eIBypass=1)(VAR BYPASS=ON);				-->Turn ON Bypass Light
+  IF (eIBypass=-1)(VAR STATUS="Digital Card Off-Line");
+  RETURN OK;							-->Return to MainLoop	
+
+;*************************************************
+;**----->E-mail Handling subroutine <Not Global>
+;** DESCRIPTION: This Subroutine is called when a new e-mail is detected
+;**              and turns on the operator notification when too many.
+;** PARAMETERS: sPARMWhichLight_LF = Name of light output.
+LBL pEmailHandler,sPARM_NewEmails;
+  VAR STATUS="Number of E-Mails in InBox="+numtostr(EMAIL);
+  IF (sPARM_NewEmails<3)(VAR nEmailNotification=OFF);
+  IF (sPARM_NewEmails<3)(RETURN OK);				-->Number of E-mails has not reach notification level.
+  IF (nEmailNotification=OFF)(MSG_SIGNAL "\nPama has at least 2 Incoming Scripts.\nPlease STOP and Re-START Pama at the earliest convience.",eMS_EmailMsg);
+  VAR nEmailNotification=ON;
+  RETURN OK;
+
+LBL pEmailMsgHandler,sPARM_SignalValue;
+  IF (sPARM_SignalValue="SomethingTHATwillNEVERbeTYPED")(RETURN OK);
+  VAR sPARM_SignalValue="SomethingTHATwillNEVERbeTYPED";
+  VAR nEmailNotification=OFF;
+  RETURN OK;
+
+LBL pEmailStrobe,sPARM_Nothing;
+  IF (nEmailStrobeCount=1)(VAR nEmailStrobeActivated=ON);
+  GOSUB pEmailStrobeState,nNULLReturn,nEmailStrobeCount,30,33,ON;
+  GOSUB pEmailStrobeState,nNULLReturn,nEmailStrobeCount,40,43,ON;
+  GOSUB pEmailStrobeState,nNULLReturn,nEmailStrobeCount,50,53,ON;
+  INC nEmailStrobeCount;
+  IF (nEmailStrobeCount>100)(VAR nEmailStrobeActivated=OFF);
+  IF (nEmailStrobeCount>100)(VAR nEmailStrobeCount=1);
+  RETURN OK;
+
+LBL pEmailStrobeState,nPARM_Count,nPARM_Bottom,nPARM_Top,nPARM_State;
+  IF (nPARM_Count<nPARM_Bottom)(RETURN OK);
+  IF (nPARM_Count>nPARM_Top)(RETURN OK);
+  IF (nPARM_State=OFF)(RETURN OK);
+;;;  IF (nPARM_Count=nPARM_Bottom)(VAR nOriginalStackLightState=StackLight);
+  IF (nPARM_Count=nPARM_Top)(VAR nPARM_State=nOriginalStackLightState);
+;;;  IF (nPARM_Count=nPARM_Bottom)(VAR StackLight=nPARM_State);
+;;;  IF (nPARM_Count=nPARM_Top)(VAR StackLight=nPARM_State);
+  RETURN OK;
+
+;*************************************************
+;**----->Light Flasher subroutine <Not Global>
+;** DESCRIPTION: This Subroutine takes an output as a Parameter
+;**              and strobes that output at the call frequency.
+;** PARAMETERS: sPARMWhichLight_LF = Name of light output.
+LBL pLightFlash,sPARMWhichLight_LF;
+  VAR sState=OFF;
+  VAR sTemp1="VAR %sPARMWhichLight_LF%=%sState%";
+  VAR sTemp2="VAR sState=%sPARMWhichLight_LF%";
+  REPLACE sTemp2;
+  RUN sTemp2;							-->Get status of output;
+  IF (sState=OFF)(GOTO pFlasherONCycle_LF); 			-->Change Status of the Output
+  VAR sState=OFF;
+  REPLACE sTemp1;						-->Prepare OUTPUT for new State
+  RUN sTemp1;							-->Set OUTPUT to new value
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"pLightFlash: Off Cycle: Command-->",sTemp1;
+  RETURN OK;
+;******************
+ LBL pFlasherONCycle_LF;
+  VAR sState=ON;
+  REPLACE sTemp1;						-->Prepare OUTPUT for new State
+  RUN sTemp1;							-->Set OUTPUT to new value
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"pLightFlash: On Cycle: Command-->",sTemp1;
+  RETURN OK;
+
+;*************************************************
+;**----->Ouput Strober subroutine <Not Global>
+;** DESCRIPTION: This Subroutine cycles through all strobed outputs
+;**              and changes their states.
+;** PARAMETERS: -None-
+LBL pOutputStrober,sPARMChanName_OS;
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"SUB pOutputStrober,%sPARMChanName_OS%","";
+  IF (nOutputIndexSave=0)(RETURN OK);				-->No Strobed OUTPUTS, return and do nothing.
+  VAR iLoop_OS=0;
+  VAR iResult=OK;
+  VAR sOutputName_OS="";
+;******************
+ LBL pLoop_OS;							-->Strobed OUTPUTS pulse loop
+  INC iLoop_OS;							-->Increment Index for OUTPUT Array.
+  GOSUB pGBL_ArrayRead,sOutputName_OS,"Outputs",CHANNAME,iLoop_OS; -->Get next OUTPUT
+  IF (sOutputName_OS!"")(GOSUB pLightFlash,iResult,sOutputName_OS);-->Change OUTPUT State
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"pOutputStrober: Output=%sOutputName_OS%","";
+  IF (iLoop_OS<nOutputIndexSave)(GOTO pLoop_OS);-->If more OUTPUTS to strobe, then loop.
+  RETURN OK;
+
+;****************************************************************
+;** Global Subroutines ******************************************
+;****************************************************************
+
+;*************************************************
+;**----->E-mailer Subroutine <Global>
+;** DESCRIPTION: This Subroutine allows scripts
+;**	with defined COM port devices to still send 
+;**	off e-mail, by utilizing this global subroutine
+;**	running in the Masterscript.
+;** Note that e-mail receipients must have a public keys on keyring.
+;** PARAMETERS: Same at the TM command
+GLOBALLBL pGBL_Email, sPARM_Address_E, sPARM_Subject_E, sPARM_Body_E, sPARM_Attach_E;
+  IF (sPARM_Attach_E="")(GOTO pGBL_Email_Attach);
+    TM 4,sPARM_Address_E,sPARM_Subject_E,sPARM_Body_E,sPARM_Attach_E;
+    RETURN OK;
+  LBL pGBL_Email_Attach;
+    TM 3,sPARM_Address_E,sPARM_Subject_E,sPARM_Body_E;
+    RETURN OK;
+
+;*************************************************
+;**----->Script Registry Subroutine <Global>
+;** DESCRIPTION: This Subroutine allows scripts
+;**	to Register themselves, along with their version.
+;**	This can then be used to inform the supervisory system 
+;**	what scripts need updated.
+;** PARAMETERS: sPARM_ScriptName=The name of the script
+;**				sPARM_ScriptVersion=version (format: YYYYMMDD)
+GLOBALLBL pGBL_ScriptRegister, sPARM_ScriptName, sPARM_ScriptVersion;
+	VAR sSR_VarCheck=0;
+	ISVAR sSR_VarCheck,sSR_ScriptRegistryList;		--> Check for existence of List
+	IF (sSR_VarCheck=0)(VAR sSR_ScriptRegistryList="");	--> Empty List, create it.
+	IF (sPARM_ScriptName="")(RETURN sSR_ScriptRegistryList);--> Return value of list
+	VAR sSR_ScriptRegistryList=sSR_ScriptRegistryList+"&"+sPARM_ScriptName+"="+sPARM_ScriptVersion;
+    RETURN sSR_ScriptRegistryList;
+
+;*************************************************
+;**----->STATUS Box Poster Subroutine <Global>
+;** DESCRIPTION: This Subroutine concatenates the two passed strings
+;** and then REPLACES all variable references.  It take sthe resultant
+;** string and displays it in the STATUS field.
+;** PARAMETERS: sPARMString_SD	= 1st part of message
+;**				iPARMData_SD	= 2nd part of Message
+GLOBALLBL pGBL_StatusDisplay,sPARMString_SD,iPARMData_SD;
+  STRCAT sPARMString_SD,iPARMData_SD;
+  REPLACE sPARMString_SD;
+  VAR STATUS=sPARMString_SD;
+  RETURN OK;
+
+;****************************************************************
+;**----->Output Control Subroutine
+;** DESCRIPTION: This Subroutine controls the Outputs
+;**              light on the Pama consoles. The function
+;**		 returns 1 for success and 0 for failure.
+;** PARAMETERS: sPARMOutputName_OC = Name of OUTPUT to control
+;**				iPARMMode_OC = integer mode of light.
+;**				Mode OFF: Light=OFF
+;**				Mode ON: Light=ON
+;**				Mode STROBE: Light Strobe
+GLOBALLBL pGBL_OutputControl,sPARMOutputName_OC,iPARMMode_OC;
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"SUB pGBL_OutputControl,%sPARMOutputName_OC%,%iPARMMode_OC%","";
+  VAR sResult=0;
+  VAR sResult2=0;
+  VAR iStatus_OC=0
+  VAR iCurrent=OFF;
+  ISALPHA sResult,iPARMMode_OC;					-->Type-Check Parameter
+  ISALPHA sResult2,ON;						-->Type-Check Parameter
+  IF (sResult!sResult2)(RETURN BAD);				-->If OUTPUT state is not valid, then return
+  IF (iPARMMode_OC=ON)(GOTO pPastParamCheck_OC);
+  IF (iPARMMode_OC=OFF)(GOTO pPastParamCheck_OC);
+  IF (iPARMMode_OC=STROBE)(GOTO pPastParamCheck_OC);
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"pGBL_OutputControl:	 -->%iPARMMode_OC%","";
+  RETURN BAD;							-->State Parameter not Valid, return!
+;******************
+ LBL pPastParamCheck_OC;
+  VAR sTemp1="ISVAR sResult,i%sPARMOutputName_OC%Status_OC";
+  VAR sTemp2="VAR iCurrent=i%sPARMOutputName_OC%Status_OC";
+  VAR sTemp3_OC="VAR i%sPARMOutputName_OC%Status_OC=iPARMMode_OC";
+  VAR sTemp4="VAR i%sPARMOutputName_OC%Status_OC=OFF";
+  VAR sTemp5="ISVAR sResult2,%sPARMOutputName_OC%";
+  REPLACE sTemp5;
+  RUN sTemp5;							-->Check to see if OUTPUT name is defined
+  IF (sResult2=0)(RETURN BAD);					-->If not defined, return error.
+  REPLACE sTemp1;
+  REPLACE sTemp2;
+  REPLACE sTemp3_OC;
+  REPLACE sTemp4;
+  RUN sTemp1;							-->Check for existance of Status variable
+  RUN sTemp2;							-->Set value of iCurrent to State of OUTPUT
+  IF (sResult=0)(RUN sTemp4);					-->If Status Variable does not exist, Create it!
+  IF (iCurrent=iPARMMode_OC)(RETURN OK);-->If commanded to set OUTPUT state to current state
+										;  then return.
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"pGBL_OutputControl: Status Has Not Changed","";
+  IF (iPARMMode_OC=STROBE)(GOTO pOutputStrobe_OC);-->Enter variable into Strobe table.
+  VAR sTemp1="VAR %sPARMOutputName_OC%=%iPARMMode_OC%";
+  REPLACE sTemp1;
+  RUN sTemp1;							-->Set Static state of variable (ON and OFF only)
+  RUN sTemp3_OC;						-->Update the Status of the OUTPUT
+  RETURN OK;
+;******************
+ LBL pOutputStrobe_OC;
+  GOSUB pGBL_ArraySet,nOutputIndexSave,"Outputs",CHANNAME,-1,sPARMOutputName_OC;
+  RUN sTemp3_OC;						-->Update the Status of the OUTPUT
+  RETURN iStatus_OC;
+
+;*************************************************
+;**----->Variable Parser Subroutine
+;** DESCRIPTION: This Subroutine takes the first parameter whose
+;**              contents are in the form of %keyword%=value and
+;**              parses out the value associated with the keyword
+;**              in the second parameter, the third parameter
+;**              defines the format of the parsing (see below).
+;**		 The function returns the parsed value associated
+;**		 with the keyword (or empty string on failure).
+;** PARAMETERS: sPARMDataStream = Unparsed Data String
+;**		sPARMAuxKeyword = Keyword to Find Data for
+;**		sPARMParseType  = Type of parsing to do
+;**			Mode 0 '&' and '=' parsing
+;**			Mode 1 '%' and '=' parsing
+GLOBALLBL pGBL_AuxParser,sPARMDataStream,sPARMAuxKeyword,sPARMParseType;
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"SUB pGBL_AuxParser,%sPARMDataStream%,%sPARMAuxKeyword%,%sPARMParseType%","";
+;*** Check Parameters against boundary conditions
+  VAR sResult=0;
+  ISALPHA sResult,sPARMDataStream;
+  IF (sResult=0)(RETURN "");
+  ISALPHA sResult,sPARMAuxKeyword;
+  IF (sResult=0)(RETURN "");
+  IF (sPARMAuxKeyword="")(RETURN "");
+  ISALPHA sResult,sPARMParseType;
+  IF (sResult=1)(RETURN "");
+  IF (sPARMParseType>1)(RETURN "");
+  VAR sRETAuxValue="";
+  VAR nPos=0;
+  VAR nPos2=0;
+  VAR nLen=0;
+  VAR sFormat="";
+  IF (sPARMParseType=1)(VAR sFormat="%"+sPARMAuxKeyword+"%");
+  IF (sPARMParseType=0)(VAR sFormat=sPARMAuxKeyword+"=");
+  INSTR nPos,sPARMDataStream,sFormat;
+  IF (nPos=0)(RETURN "");					-->Keyword not found, RTS.
+  STRLEN sFormat,nLen;
+  VAR nPos=nPos+nLen;						-->Calculate the begining of the value
+  IF (sPARMParseType=1)(INC nPos);
+  VAR nPos2=nPos;
+  IF (sPARMParseType=1)(INSTR nPos2,sPARMDataStream,"%");
+  IF (sPARMParseType=0)(INSTR nPos2,sPARMDataStream,"&");
+  IF (nPos2!0)(GOTO pSkipAdj);					-->If last key-value pair, give the rest of line.
+  STRLEN sPARMDataStream,nPos2;
+  INC nPos2;							-->Inc count by 1 to account for Length.
+  LBL pSkipAdj;
+    VAR sRETAuxValue=sPARMDataStream;
+    VAR nPos2=nPos2-nPos;
+    MIDSTR sRETAuxValue,nPos,nPos2;				-->Pull Value substring from AUILIARY
+    RETURN sRETAuxValue;
+
+;****************************************************************
+;**----->Array Set Subroutine
+;** DESCRIPTION: This Subroutine creates and populates a sparse array.
+;**		 It returns >0 for success and 0 for failure.
+;** PARAMETERS: sPARMName_AS = The string name of the Array
+;**		iPARMIndex_AS=-1 increments
+;**		sPARMData_AS = The Data (String or Integer)
+GLOBALLBL pGBL_ArraySet,sPARMName_AS,sPARMChanMame_AS,iPARMIndex_AS,sPARMData_AS;
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"SUB pGBL_ArraySet,%sPARMName_AS%,%sPARMChanMame_AS%,%iPARMIndex_AS%,%sPARMData_AS%","";
+  VAR sChanName="";
+  GOSUB pGBL_VarConvertor,sChanName,sPARMChanMame_AS;
+  VAR iResult=0;
+  ISALPHA iResult,sPARMName_AS;
+  IF (iResult=0)(RETURN BAD);					-->Only allow string names
+  ISALPHA iResult,iPARMIndex_AS;
+  IF (iResult=1)(RETURN BAD);					-->Only allow numerical Indexes
+  IF (iPARMIndex_AS=0)(RETURN BAD);				-->Don't allow the Zero Index
+  VAR sTemp1="VAR s%sChanName%%sPARMName_AS%%iPARMIndex_AS%='%sPARMData_AS%'";
+  VAR sTemp2="ISVAR iResult,i%sChanName%%sPARMName_AS%";
+  VAR sTemp3="VAR i%sChanName%%sPARMName_AS%=0";
+  VAR sTemp4="INC i%sChanName%%sPARMName_AS%";
+  VAR sTemp5="VAR i%sChanName%%sPARMName_AS%=iPARMIndex_AS";
+  REPLACE sTemp2;
+  REPLACE sTemp3;
+  REPLACE sTemp5;
+  RUN sTemp2;							-->Check for existance of Array
+  IF (iResult>0)(GOTO pSetArrayValue);
+  RUN sTemp3;							-->Create Array
+  ;******************
+ LBL pSetArrayValue;
+  IF (iPARMIndex_AS>-1)(RUN sTemp5);				-->Set Index to Parameter value
+  IF (iPARMIndex_AS>-1)(GOTO pSkipInc_AS);			-->Skip Increment counter
+  VAR sTemp2="VAR iPARMIndex_AS=i%sChanName%%sPARMName_AS%";
+  REPLACE sTemp2;
+  REPLACE sTemp4;
+  RUN sTemp4;
+  RUN sTemp2;
+  ;******************
+ LBL pSkipInc_AS;
+  REPLACE sTemp1;
+  ;**VAR STATUS=sTemp1;
+  RUN sTemp1;
+  RETURN iPARMIndex_AS;
+
+;****************************************************************
+;**----->Array Read Subroutine
+;** DESCRIPTION: This Subroutine creates and populates a sparse array.
+;**		 It returns >0 for success and -2 for failure.
+;** PARAMETERS: sPARMName_AR = The string name of the Array
+;**		iPARMIndex_AR=-1 Pulls and decrements.
+GLOBALLBL pGBL_ArrayRead,sPARMName_AR,sPARMChanMame_AR,iPARMIndex_AR;
+  ;GOSUB pGBL_StatusDisplay,nNULLReturn,"SUB pGBL_ArrayRead,%sPARMName_AR%,%sPARMChanMame_AR%,%iPARMIndex_AR%","";
+  VAR sChanName="";
+  VAR vReturnValue=0;
+  VAR iResult=0;
+  GOSUB pGBL_VarConvertor,sChanName,sPARMChanMame_AR;
+  ISALPHA iResult,sPARMName_AR;
+  IF (iResult=0)(RETURN -2);					-->Only allow string names
+  ISALPHA iResult,iPARMIndex_AR;
+  IF (iResult=1)(RETURN -2);					-->Only allow numerical Indexes
+  IF (iPARMIndex_AR=0)(RETURN -2);				-->Don't allow the Zero Index
+  VAR sTemp="i%sChanName%%sPARMName_AR%";
+  REPLACE sTemp;
+  VAR sTemp1="ISVAR iResult,%sTemp%";
+  VAR sTemp2="VAR iPARMIndex_AR=%sTemp%";
+  VAR sTemp3="VAR vReturnValue=s%sChanName%%sPARMName_AR%%iPARMIndex_AR%";
+  VAR sTemp4="%";
+  VAR sTemp5="VAR %sTemp%=iNewIndex"
+  REPLACE sTemp1;
+  REPLACE sTemp2;
+  REPLACE sTemp5
+  RUN sTemp1
+  IF (iResult=0)(RETURN -2);					-->Array doesn't Exist
+  IF (iPARMIndex_AR>-1)(GOTO pGetValue_AR); 			-->If Array (vs. Stack) access then GetValue
+  RUN sTemp2;
+  IF (iPARMIndex_AR=0)(RETURN -1);				-->Bottom of Stack reached.
+  REPLACE sTemp3;
+  RUN sTemp3;							-->Get current stack value
+  STRCAT sTemp4,sTemp;
+  STRCAT sTemp4,"%-1";
+  REPLACE sTemp4;
+  VAR iNewIndex=0
+  EVAL iNewIndex,sTemp4;
+  RUN sTemp5;							-->Decrement Stack pointer			
+  RETURN vReturnValue;
+  ;******************
+ LBL pGetValue_AR;
+  VAR sTemp6="ISVAR iResult,s%sChanName%%sPARMName_AR%%iPARMIndex_AR%";
+  REPLACE sTemp6;
+  RUN sTemp6;
+  IF (iResult=0)(RETURN -1);					-->Array Item doesn't Exist (Sparse Array)
+  REPLACE sTemp3;
+  RUN sTemp3;
+  RETURN vReturnValue;
+
+;*************************************************
+;**----->String to Variable Conversion Subroutine
+;** DESCRIPTION: This Subroutine takes the first parameter and
+;**              converts its contents to the correct form to
+;**              be used as a variable.
+GLOBALLBL pGBL_VarConvertor,sPARMData_VC;
+  VAR iLoop=1;
+  VAR iCurrent=0;
+  VAR sResult="_";
+  STRLEN sPARMData_VC,iCurrent;
+  LBL pLoop_VC;
+    VAR iIndex=0;
+    VAR sTemp1=sPARMData_VC;
+    MIDSTR sTemp1,iLoop,1;
+    INSTR iIndex,"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890_",sTemp1;
+    IF (iIndex=0)(VAR sTemp1="_");
+    STRCAT sResult,sTemp1;
+    INC iLoop;
+    IF (iLoop>iCurrent)(RETURN sResult);
+    GOTO pLoop_VC;
+
+;*************************************************
+;**----->Initialize all of the ADO dBase Variables Subroutine
+;** DESCRIPTION: This Subroutine sets all of the
+;** ADO Global Variables.
+GLOBALLBL pGBL_InitdBaseVars,sPARMStatus_IBV;
+  VAR nIBV_BeenHere=0;
+  ISVAR nIBV_BeenHere,nIBV_DoneThat;
+  IF (nIBV_BeenHere=1)(RETURN OK);
+  VAR _SOURCE="SOURCE",GLOBAL;
+  VAR _DESCRIPTION="DESCRIPTION",GLOBAL;
+  VAR _HRESULT="HRESULT",GLOBAL;
+  VAR _WCODE="WCODE",GLOBAL;
+  VAR _USECLIENT="USECLIENT",GLOBAL;
+  VAR _USESERVER="USESERVER",GLOBAL;
+  VAR _FILE="FILE",GLOBAL;
+  VAR _STOREDPROC="STOREDPROC",GLOBAL;
+  VAR _TABLE="TABLE",GLOBAL;
+  VAR _TABLEDIRECT="TABLEDIRECT",GLOBAL;
+  VAR _TEXT="TEXT",GLOBAL;
+  VAR _UNKNOWN="UNKNOWN",GLOBAL;
+  VAR _FIRST="FIRST",GLOBAL;
+  VAR _LAST="LAST",GLOBAL;
+  VAR _NEXT="NEXT",GLOBAL;
+  VAR _PREVIOUS="PREVIOUS",GLOBAL;
+  VAR _CURRENT="CURRENT",GLOBAL;
+  VAR _DYNAMIC="DYNAMIC",GLOBAL;
+  VAR _FORWARDONLY="FORWARDONLY",GLOBAL;
+  VAR _KEYSET="KEYSET",GLOBAL;
+  VAR _STATIC="STATIC",GLOBAL;
+  VAR _BATCHOPTIMISTIC="BATCHOPTIMISTIC",GLOBAL;
+  VAR _OPTIMISTIC="OPTIMISTIC",GLOBAL;
+  VAR _PESSIMISTIC="PESSIMISTIC",GLOBAL;
+  VAR _READONLY="READONLY",GLOBAL;
+  VAR nIBV_DoneThat=1;
+  RETURN OK;
+
+;*************************************************
+;**----->Send Public Key to the TARTUS system
+;** DESCRIPTION: This Subroutine disappears after the TARTUS
+;**		system has received the Public Key, incorporated it
+;**		into its keyring, and sent a response back to this system.
+;** ADO Global Variables.
+GLOBALLBL pGBL_TARTUS_Remote_Handshake,sPARMStatus_IBV;
+  VAR nFound=0;
+  VAR sFilenameToSend="C:\\Program Files\\Hewlett-Packard IJBU\\Pama\\PubExportKey.gpg";
+  FILEINFO nFound,sFilenameToSend,1;
+  IF (nFound=1)(GOTO pSendPublicKeyToTATRUS);
+    CANCEL_MSG;
+	MSG "No Encryption Keyset has been created for this\nPama Installation. Please Reinstall Pama Odyssey.";
+	RETURN BAD;
+  LBL pSendPublicKeyToTATRUS;
+    VAR sEmailSubject="Pama Registration: "+IDENTITY;
+    VAR sEmailBody   =           "Administrator: "+ADMINEMAIL+"\n";
+    VAR sEmailBody   =sEmailBody+"Linename: "     +IDENTITY  +"\n";
+    TM 4,"the_pama@hp.com",sEmailSubject,sEmailBody,sFilenameToSend;
+    VAR sTemp="";
+    R sTemp;
+    VAR STATUS="Emailing to Tartus: "+sTemp;
+  RETURN OK;
+
+;*************************************************
+;**----->Handle Masterscript and Global Errors
+;** DESCRIPTION: This function is a Chai defined routine
+;**           that catches all errors and then terminates Pama
+GLOBALLBL _ERRORHANDLER, sPARM_ErrMsg, nPARM_ErrNum;
+  VAR STATUS = "sMessage = <" + sPARM_ErrMsg + ">, nNumber = " + numtostr(nPARM_ErrNum);
+  MSG_ACK "Internal error\nPama Terminating";
+  THROW_ERROR sPARM_ErrMsg, nPARM_ErrNum;
+  RETURN OK;

@@ -1,0 +1,92 @@
+;*******************************************
+;** Default Script - Empty Version       ***
+;** Apr. 28 1999                         ***
+;*******************************************
+
+
+;The breakit script
+
+INPUTOPEN sbreakit,SIGNAL;			-->sets the string used to try to break 
+VAR sbreakit="FALSE";					"TRUE" will give the signal to try to break the script "FALSE" will allow it to act normally
+
+INPUTOPEN swaitdatamanScan0,SIGNAL;
+VAR swaitdatamanScan0="";
+
+VAR ndelay=2;
+
+TM 1,"DISCONNECT";
+
+TM 3,"CONNECT","10.20.33.33",23;				--> Initialize Communication with Dataman scanner
+
+
+VAR smsg="";
+
+LBL start;
+
+MSG_QUERY "enter 'TRUE' to try to break the script 'FALSE' does nothing or enter a command to send to the dataman or sendit.",smsg,"";
+
+IF (smsg="TRUE")(VAR sbreakit=smsg);
+IF (smsg="TRUE")(GOTO start);
+
+IF (smsg="sendit")(GOTO psendstuff);
+
+IF (smsg="6")(GOTO pdoathing);
+
+IF (smsg="FLUSH")(GOTO pFlush);
+
+
+IF (smsg!"")(T smsg);
+
+;VAR sbreakit=smsg;
+
+GOTO start;
+
+LBL pFlush;
+VAR STATUS="-------------------------------------FLUSH";
+VAR swaitdatamanScan0="FLUSH";
+
+GOTO start;
+
+LBL pdoathing;
+
+VAR strMCCountVal="";
+MSG_QUERY "What is the Master Case Quantity",strMCCountVal,"";
+
+VAR line12="";
+VAR line12=strMCCountVal;
+
+VAR STATUS="line12: "+line12;
+
+VAR line12="Fld_Qtty="+chr(34)+line12+chr(34);
+
+VAR STATUS="line12: "+line12;
+
+
+
+
+
+GOTO start;
+
+
+
+LBL psendstuff;
+
+VAR counter=0;
+LBL pfor; simple for loop
+
+T "+\n";1
+WAIT ndelay;
+
+INC counter;
+IF (counter<100)(GOTO pfor);
+
+
+GOTO start;
+
+
+;CANCEL_MSG;
+;MSG_ACK "This Channel has not been set-up.\nDEFAULT.PSF";
+
+LBL theend;
+VAR RECEIVED="Script Complete";
+END;

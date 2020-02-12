@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v2004 rel. 3 U (http://www.xmlspy.com) by Irene Filipponi (Hewlett Packard) -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:element name="CFG_XML_Map">
+		<xs:annotation>
+			<xs:documentation>Comment describing your root element</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="Element_Map" maxOccurs="unbounded">
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="PVAR_UNITS" maxOccurs="unbounded">
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="xs:string">
+											<xs:attribute name="PVAR_ID" type="xs:unsignedInt" use="required"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:attribute name="PRODUCT_KEY" use="required">
+							<xs:simpleType>
+								<xs:restriction base="xs:string"/>
+							</xs:simpleType>
+						</xs:attribute>
+						<xs:attribute name="COMPONENT_CLASS" use="required">
+							<xs:simpleType>
+								<xs:restriction base="xs:string">
+									<xs:enumeration value="HOST_ASSEMBLY"/>
+									<xs:enumeration value="NOT VALID"/>
+									<xs:enumeration value="ON-PRIMARY MATERIAL"/>
+									<xs:enumeration value="ON-RETAIL PKG MATERIAL"/>
+									<xs:enumeration value="PEN/INK"/>
+									<xs:enumeration value="PRIMARY ASSEMBLY (BULK)"/>
+									<xs:enumeration value="PRIMARY PACKAGING"/>
+									<xs:enumeration value="RECEPTACLE LABEL"/>
+									<xs:enumeration value="RETAIL BUNDLE"/>
+									<xs:enumeration value="RETAIL MASTERSHIP"/>
+									<xs:enumeration value="RETAIL PACKAGING"/>
+									<xs:enumeration value="WET ASSEMBLY"/>
+								</xs:restriction>
+							</xs:simpleType>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="version" type="xs:decimal" use="optional" default="0.93"/>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

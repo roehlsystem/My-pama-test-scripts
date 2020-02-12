@@ -1,0 +1,237 @@
+;*******************************************
+;** Testing with datamanscanner script - 0.1       ***
+;** Jan. 07 2020                         ***
+;** David Roehl                          ***
+;*******************************************
+
+
+
+;**********************************************
+;Signals
+
+
+INPUTOPEN sdatamanScan0,SIGNAL;
+VAR sdatamanScan0="";
+
+INPUTOPEN swaitdatamanScan0,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan0="";
+
+;**********************************************
+;PARAMETER
+VAR sScannerFileName="";
+VAR sMode="";
+VAR sDiagDispType="";
+VAR sAuxValue="";
+VAR sSim="";
+VAR sPicaData1="";
+VAR sPicaData2="";
+VAR sIPAddress="";
+
+;****************************************************************************************
+;-->TEST: Pama 3.00
+PARAMETER sIPAddress,"ip address","","Enter the IP address of the congex dataman scanner";
+PARAMETER sScannerFileName,"FileName","","File Name for File Config Mode";
+PARAMETER sMode,"mode","DEFAULT,LOT,LOG","This setting controls what type of logging is performed by this channel.";
+PARAMETER sDiagDispType,"percent","OFF,ON","This setting controls this channels display method in the diagnose screen.";
+
+PARAMETER sAuxValue,"eeprom","","This setting allows the entery of the scanners EEPROM Checksum, which will always be checked at Start-up."
+PARAMETER sSim,"SimStatus","DEBUG,RUN","This setting allows testing with parameter sPEN data";
+PARAMETER sPicaData1,"PenData1","","This is the inupt data to simulate a scan";
+PARAMETER sPicaData2,"PenData2","","This is the inupt data to simulate a scan";
+;****************************************************************************************
+
+VAR mismatchmsg="\n*** MISMATCH! *** \nScanned value = ";
+VAR TIMEOUTMSG="TIMEOUT";
+VAR nNoreads=0;							-->Used to store Diagnose screen counts
+VAR nGoodreadseads=0;						-->Used to store Diagnose screen counts
+VAR nTReads=0;							-->Used to store Diagnose screen counts
+VAR nCurNoreads=0;  holds the number of NR in a row
+VAR vReturnValue="";						-->Standard Subroutine Return variable
+VAR sScanValue;
+VAR readvalue="";
+VAR whichevent=0;
+VAR waittimeout=30;
+
+VAR sFirstValue="";
+VAR nLoopCount=0;
+
+;Eof variable declarations
+
+IF (sSim="DEBUG")(VAR waittimeout=30);"RUN"
+IF (sSim!"DEBUG")(VAR waittimeout=-1);VAR waittimeout=-1;[~] <-- Change this to -1 so it won't time out
+
+VAR fileholder=""
+READFILE fileholder,"C:\\test\\test.txt";
+VAR STATUS=fileholder;
+
+
+VAR STATUS="testing below";
+;RUN fileholder;
+
+VAR place="";
+VAR srun="";
+VAR testcount=1;
+LBL pTest;
+
+STRARRAY srun,fileholder,testcount,"\n";
+
+VAR place=srun;
+MIDSTR place,1,4;
+VAR STATUS=place;
+IF (place="done")(VAR STATUS="srun=done"); [fix]
+IF (place="done")(GOTO pafterTest); [fix]
+
+IF (testcount>5)(GOTO pafterTest);
+
+RUN srun;
+
+
+INC testcount;
+GOTO pTest;
+
+LBL pafterTest;
+
+
+
+;[fix] some testing stuff<
+
+VAR fgi1="Z2H77AN#140k";
+VAR fgi2="Z2H77AN#140w";
+
+IF (fgi1="Z2H77AN#140?") (VAR STATUS="fgi1='Z2H77AN#140?'  is true");
+IF (fgi2="Z2H77AN#140?") (VAR STATUS="fgi2='Z2H77AN#140?'  is true");
+IF (fgi1="Z2H77AN#140*") (VAR STATUS="fgi1='Z2H77AN#140*'  is true");
+IF (fgi1="Z2H77AN#140*") (VAR STATUS="fgi1='Z2H77AN#140*'  is true");
+
+
+
+;>[fix]
+
+
+VAR STATUS="==============PAUSING to simulate doing stuff at the beginning.";
+WAIT 100;
+VAR STATUS="==============Done doing stuff";
+
+
+
+;RUN "VAR STATUS='first line'VAR STATUS='second line';"; a test
+
+
+
+LBL pconnectedSuccesfully;
+
+;Initial setup  loads the first scanned value to sFirstValue and sets that as the 'goodread' value
+
+
+
+;WAIT 200; [DSR] slows it down to test something
+
+VAR swaitdatamanScan0="READY";  +-+-tells the scanner this channel is ready for more scans
+
+VAR whichevent=0;
+WAITFORANY whichevent,waittimeout,sdatamanScan0);                 ;READ;
+VAR STATUS ="---------------- whichevent --- = "+numtostr(whichevent);
+IF (whichevent=0)(GOTO pconnectedSuccesfully);
+IF (whichevent!1)(GOTO pconnectedSuccesfully);
+
+
+
+
+;R readvalue;
+;VAR swaitdatamanScan0="HOLD";  +-+-tells the scanner this channel is not ready for more scans
+VAR readvalue=sdatamanScan0;
+IF (readvalue="") (GOTO pconnectedSuccesfully);
+IF (readvalue="NR") (GOTO pconnectedSuccesfully);
+VAR sFirstValue=readvalue;
+VAR STATUS="------------------------------ sFirstValue = "+sFirstValue;
+
+INC TGOODREAD;
+
+
+
+STARTHEART;
+
+
+
+
+
+LBL theLoop;
+
+;IF (nLoopCount>5)(T "+\n");
+
+VAR swaitdatamanScan0="READY";  +-+-tells the scanner this channel is ready for more scans
+
+;VAR STATUS= "theLoop"+numtostr(nLoopCount);
+VAR whichevent=0;
+WAITFORANY whichevent,waittimeout,sdatamanScan0);       ;READ;
+;VAR STATUS ="---------------- whichevent --- = "+numtostr(whichevent);
+IF (whichevent=0)(INC nLoopCount);
+IF (whichevent=0)(GOTO theLoop);
+IF (whichevent=1)(VAR nLoopCount=0);
+IF (whichevent=1)(GOTO pRead);
+
+GOTO theLoop;
+
+
+LBL pRead;
+
+VAR swaitdatamanScan0="HOLD";  +-+-tells the scanner this channel is not ready for more scans
+
+
+;R readvalue;
+VAR readvalue=sdatamanScan0;
+
+IF (readvalue="")(GOTO theLoop);
+
+LBL pDebugRoutine;
+VAR STATUS = "- READ = "+readvalue;
+VAR sScanValue=readvalue;
+;VAR STATUS = "sScanValue = "+sScanValue;
+
+LBL secondRead;
+
+IF (sScanValue="NR") (GOTO noRead);
+
+VAR nCurNoreads=0;  reset current noread counter
+
+VAR STATUS ="sScanValue= "+sScanValue;
+
+IF (sScanValue!sFirstValue) ( GOTO badValue);
+
+LBL goodRead;*******************************************
+INC TGOODREAD;
+VAR RECEIVED=sScanValue;
+WAIT 5;   added to simulate doing something of great importance
+
+GOTO theLoop;
+
+LBL noRead; ********************************************
+
+INC TNOREAD;
+INC nCurNoreads;
+VAR STATUS ="Received a NR:"+numtostr(nCurNoreads);
+
+IF (nCurNoreads>MAXNOREAD)(MSG_ACK "Excessive NR");
+IF (nCurNoreads>MAXNOREAD)(VAR nCurNoreads=0);
+
+GOTO theLoop;
+
+
+
+LBL badValue;   *****************when the current scan does not match the set scan value
+VAR STATUS = "+++++++++++++++mismatch+++++++++++++++";
+
+INC MISREADS;
+VAR sMessage="mismatch\nReceived: "+sScanValue+"\nGoodvalue: "+sFirstValue;
+MSG_ACK sMessage;
+
+GOTO theLoop;
+
+
+
+;CANCEL_MSG;
+;MSG_ACK "This Channel has not been set-up.\nDEFAULT.PSF";
+
+LBL theend;
+VAR RECEIVED="Script Complete";
+END;

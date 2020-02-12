@@ -1,0 +1,207 @@
+;*******************************************
+;** generic datamanscanner script - 0.1  ***
+;** Jan. 11 2020                         ***
+;** David Roehl                          ***
+;*******************************************
+
+
+;****************************************************************************************
+;SIGNALs
+
+INPUTOPEN sdatamanScan,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan="";
+
+INPUTOPEN swaitdatamanScan,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sbreakit,SIGNAL;			-->sets the string used to try to break 
+VAR sbreakit="FALSE";					"TRUE" will give the signal to try to break the script "FALSE" will allow it to act normally
+
+
+;****************************************************************************************
+;PARAMETER VARs
+
+VAR sIPAddress="";
+VAR sTimeout="";
+VAR debug="";
+
+
+;****************************************************************************************
+;PARAMETER Declarations
+PARAMETER sIPAddress,"ip address","","Enter the IP address of the congex dataman scanner";
+PARAMETER sTimeout,"Read timeout","","Enter the timeout for the read. blank for 10s, -1 for infinite."
+PARAMETER debug,"Debug mode","debug,not debug","Debug displays more info.  It has no functional effect"
+
+
+;****************************************************************************************
+;VAR Declarations
+
+VAR TIMEOUTMSG="TIMEOUT";
+VAR nTimeout=0;
+VAR sScanValue="";
+VAR readvalue="";
+VAR whichevent=0;
+VAR waittimeout=30;
+VAR sMsg="";
+
+
+;VARs for testing
+VAR nLoopCount=0;
+
+
+
+
+;****************************************************************************************
+;Eof  declarations
+
+
+
+;****************************************************************************************
+;prestart setup
+
+LBL preStart;
+
+IF (sTimeout="")(VAR nTimeout=10000);
+IF (sTimeout!"")(STRTONUM sTimeout);
+IF (sTimeout!"")(VAR nTimeout=sTimeout);
+
+VAR sMsg="Debug mode is on\n-------->IPAdress= "+sIPAddress+"\n-------->nTimeout= "+numtostr(nTimeout);
+IF (debug="debug")(VAR STATUS=sMsg);
+
+
+
+;****************************************************************************************
+;channel start
+
+LBL pConnect;
+
+TM 1,"DISCONNECT";
+WAIT 20;
+
+VAR STATUS = "Connecting to "+sIPAddress;
+
+TM 3,"CONNECT",sIPAddress,23;				--> Initialize Communication with Dataman scanner
+
+
+
+WAIT 10;
+IF (CONNECTION = "CONNECTED")(VAR STATUS = "Cognex connected succesfully");
+IF (CONNECTION = "CONNECTED")(GOTO pconnectedSuccesfully);
+MSG_ACK "FAILED TO CONNECT WITH Cognex INTERFACE - \n    Hit OK to try again";
+GOTO pConnect;   Trys the connection again
+
+
+
+
+LBL pconnectedSuccesfully;
+
+
+VAR TIMEOUT = nTimeout;
+
+VAR ncounter=0;
+VAR nreadCounter=0;
+
+;****************************************************************************************
+;the main loop
+
+LBL pready
+
+IF (debug="debug")(VAR STATUS=swaitdatamanScan);
+
+INC nLoopCount;
+
+;IF (nLoopCount=5)(GOTO pbreakit);    --------------try to break stuff------------------------------------------------------------------
+
+IF (debug="debug")(VAR STATUS="In waitforany loop:"+numtostr(nLoopCount));
+
+WAITFORANY whichevent,nTimeout,swaitdatamanScan;   Waits for signal to send next scan
+
+IF (debug="debug")(VAR STATUS=swaitdatamanScan);
+IF (debug="debug")(VAR STATUS=whichevent);
+IF (whichevent=0)(GOTO pready);
+IF (whichevent=1)(IF (debug="debug")(VAR STATUS=swaitdatamanScan));
+IF (whichevent=1)(IF (swaitdatamanScan="READY")(GOTO preadLoop));
+IF (whichevent=1)(IF (swaitdatamanScan="HOLD")(GOTO pready));
+IF (whichevent=1)(GOTO preadLoop);                                          +-+- if no valid entry in swaitdatamanScan try to read
+
+
+
+LBL preadLoop;************************************
+
+IF (debug="debug")(IF (sbreakit="TRUE")(GOTO pbreakit));    --------------try to break stuff------------------------------------------------------------------
+IF (debug="debug")(VAR STATUS=swaitdatamanScan);
+
+VAR readvalue="";
+R readvalue;
+
+INC ncounter;
+
+IF (readvalue!"")(VAR swaitdatamanScan="HOLD");             +-+-Makes this script wait
+
+IF (readvalue!"")(INC nreadCounter);
+IF (readvalue!"")(VAR sdatamanScan=readvalue);
+IF (readvalue!"")(GOTO pready);
+
+
+
+
+IF (debug="debug")(VAR STATUS ="++++++++++++nCounter:("+numtostr(ncounter)+")   nreadCounter: "+numtostr(nreadCounter));
+
+;------------------------------------------------------------
+;try to break it :(
+
+;IF (readvalue="NR")(GOTO pbreakit);
+
+
+;------------------------------------------------------------
+
+
+GOTO preadLoop;
+;>all below is not used currently*****************************************************************************************************************************
+
+
+
+LBL pbreakit;  Trying to break stuff
+VAR STATUS ="---------------------------------------------------------Trying to break things";
+
+T "+\n";
+
+WAIT 10;
+
+T "+\n";
+
+WAIT 10;
+T "+\n";
+
+WAIT 10;
+T "+\n";
+WAIT 10;
+T "+\n";
+WAIT 10;
+T "+\n";
+IF (nLoopCount=11)(VAR nLoopCount=0);
+
+VAR sbreakit="FALSE";
+VAR STATUS = "--------------------------------------------------------eof trying to break things.";
+
+;VAR sdatamanScan="try 1/5";
+;VAR sdatamanScan="try 2/5";
+;VAR sdatamanScan="try 3/5";
+;VAR sdatamanScan="try 4/5";
+;VAR sdatamanScan="try 5/5";
+
+
+
+GOTO preadLoop;
+
+
+
+
+
+
+
+
+
+LBL theend;
+VAR RECEIVED="Script Complete";
+END;

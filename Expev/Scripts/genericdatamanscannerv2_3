@@ -1,0 +1,558 @@
+;*******************************************
+;** generic datamanscanner script - 1.0  ***
+;** Jan. 11 2020                         ***
+;**                                      ***
+;**  By David Roehl                      ***
+;**                                      ***
+;**  This scrip is designed to be used   ***
+;**   to get scans from a dataman scanner***
+;**    and pass them to a Master script. ***
+;**                                      ***
+;**  It can also be used as a standalone ***
+;**    Script that just checks for reads ***
+;**     or NR's and alarms when excessive***
+;**      NRs happen.                     ***
+;*******************************************
+
+
+;**  This script is designed to send use the signal variable sdatamanScanx to send the scans that it receives from a dataman scanner.
+;**     After this script sets the signal variable it goes into a hold condition with its swaitdatamanScanx variable where it waits to be told to send another scan with sdatamanScanx
+;**  This script starts with swaitdatamanScanx="HOLD" So the master script must tell it when it is ready to receive the first scan.  This allows the Master script to setup the scanner.
+;**  
+;*******************************************
+;**INPUTs
+;**SCANNER:receives information from the scanner it is connected to
+;**
+;**MASTER: sets the swaitdatamanx to READY when it ready for more data.
+;**		
+;*******************************************
+;**outputs
+;**MASTER: Uses sdatamanScanx to transmit scan (data received from the scanner) to MASTER script.
+;*******************************************
+;**freedscript
+;** if this script is not a slave it will keep track of its # of reads and NRs.  Does not care what the read is as long as it is valid.
+;*******************************************
+
+
+;****************************************************************************************
+;** SIGNALs declarations
+;**
+;******sdatamanScanx: is used to transfer scanned information from this script to the master script.
+;**
+;******swaitdatamanScanx:  Is used to let the master script control this script.  Has 3 used values currently
+;**	           "HOLD"  : Tells this script to not send any more scans via sdatamanScanx
+;**	           "READY" : Means this script is to send a scan whenever it receives it.
+;**	   [FIX]   "FLUSH" : Means that this script should clear its read buffer, after the buffer is cleared it will change swaitdatamanScanx to "HOLD".   **IMPORTANT** Be careful when using this as important data could be lost.
+;**
+;****************************************************************************************
+
+
+INPUTOPEN sdatamanScan0,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan0="";
+
+INPUTOPEN swaitdatamanScan0,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan0="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sdatamanScan1,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan1="";
+
+INPUTOPEN swaitdatamanScan1,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan1="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sdatamanScan2,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan2="";
+
+INPUTOPEN swaitdatamanScan2,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan2="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sdatamanScan3,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan3="";
+
+INPUTOPEN swaitdatamanScan3,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan3="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sdatamanScan4,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan4="";
+
+INPUTOPEN swaitdatamanScan4,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan4="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sdatamanScan5,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan5="";
+
+INPUTOPEN swaitdatamanScan5,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan5="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sdatamanScan6,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan6="";
+
+INPUTOPEN swaitdatamanScan6,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan6="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sdatamanScan7,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan7="";
+
+INPUTOPEN swaitdatamanScan7,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan7="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+INPUTOPEN sdatamanScan8,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan8="";
+
+INPUTOPEN swaitdatamanScan8,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan8="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+
+INPUTOPEN sdatamanScan9,SIGNAL;			-->sets the string used to signal the scan user
+VAR sdatamanScan9="";
+
+INPUTOPEN swaitdatamanScan9,SIGNAL;			-->sets the string used to signal that the scan user is done processing it.
+VAR swaitdatamanScan9="";					"READY" means send more scans, "HOLD"  means wait until ready
+
+
+
+INPUTOPEN sbreakit,SIGNAL;			-->sets the string used to try to break 
+VAR sbreakit="FALSE";					"TRUE" will give the signal to try to break the script "FALSE" will allow it to act normally
+
+
+;****************************************************************************************
+;PARAMETER VARs
+
+
+VAR sIPAddress="";
+VAR sScannerPort="";
+VAR sTimeout="";
+VAR debug="";
+VAR sID="";
+VAR sCommunicationCheck="";
+VAR sAlarmNR="";
+VAR slocalScan="";
+VAR sIsSlave="";
+
+
+;****************************************************************************************
+;PARAMETER Declarations
+PARAMETER sIPAddress,"IP address","","Enter the IP address of the congex dataman scanner";
+PARAMETER sScannerPort,"Scanner port","","Enter the Port of the congex dataman scanner (blank is 23 which is default for the scanners)";
+
+PARAMETER sID,"What variable name to use to transfer data","none,sdatamanScan0,sdatamanScan1,sdatamanScan2,sdatamanScan3,sdatamanScan4,sdatamanScan5,sdatamanScan6,sdatamanScan7,sdatamanScan8,sdatamanScan9","Enter the signal variable name that will be used to transmit data to the other programs, there is a corresponding HOLD signal variable called swaitdatamanscan(x).  If none is selected this script will not transfer data to any other channel."
+
+PARAMETER sIsSlave,"Is this script a slave?","TRUE,FALSE","TRUE: does not count reads/nrs.   FALSE: counts reads/nrs and triggers for to many NR.";
+PARAMETER sAlarmNR,"Alarm for NRs","TRUE,FALSE","Should this script alarm for exceeding max NR's in a row. Only functions if it is not a slave."
+
+
+PARAMETER sTimeout,"Read timeout(in ms)","","Enter the timeout for the read(in milliseconds). Blank for default (10s), -1 for infinite."
+PARAMETER sCommunicationCheck,"Communication check frequency.","","How often to check that the scanner is still connected. Blank is default, -1 is disabled.(time between checks=read timeout * this value)"
+
+PARAMETER debug,"Debug mode","debug,not debug","Debug displays more info.  It has no functional effect"
+
+
+
+
+;****************************************************************************************
+;VAR Declarations
+
+VAR TIMEOUTMSG="TIMEOUT";
+
+VAR sScanValue="";
+VAR readvalue="";
+VAR sMsg="";
+VAR swaitID="";
+VAR sAlwaysReady="READY";
+
+VAR runMSG="";
+
+
+VAR whichevent=0;
+VAR waittimeout=30;
+
+VAR nCommunicationCheck="";  Will be converted to num before program starts
+VAR nTimeout="";  Will be converted to num before program starts
+VAR nScannerPort="";  Will be converted to num before program starts
+
+;Counters
+VAR nCurNoreads=0;          Holds current NRs since last valid read
+VAR nReadTimeoutCounter=0;
+VAR nReconnectCounter=0;
+
+
+
+
+;VARs for testing
+
+
+
+
+;****************************************************************************************
+;Eof  declarations
+
+
+
+;****************************************************************************************
+;prestart setup
+;Closes unnecessary inputs  and performs other declaration related functions
+
+
+
+
+IF (sID="sdatamanScan0")(GOTO p1);
+
+INPUTCLOSE sdatamanScan0,SIGNAL;		
+INPUTCLOSE swaitdatamanScan0,SIGNAL;		
+
+LBL p1;
+IF (sID="sdatamanScan1")(GOTO p2);
+
+INPUTCLOSE sdatamanScan1,SIGNAL;		
+INPUTCLOSE swaitdatamanScan1,SIGNAL;	
+
+LBL p2;
+IF (sID="sdatamanScan2")(GOTO p3);
+
+INPUTCLOSE sdatamanScan2,SIGNAL;		
+INPUTCLOSE swaitdatamanScan2,SIGNAL;	
+
+LBL p3;
+IF (sID="sdatamanScan3")(GOTO p4);
+
+INPUTCLOSE sdatamanScan3,SIGNAL;		
+INPUTCLOSE swaitdatamanScan3,SIGNAL;	
+
+LBL p4;
+IF (sID="sdatamanScan4")(GOTO p5);
+
+INPUTCLOSE sdatamanScan4,SIGNAL;		
+INPUTCLOSE swaitdatamanScan4,SIGNAL;	
+
+LBL p5;
+IF (sID="sdatamanScan5")(GOTO p6);
+
+INPUTCLOSE sdatamanScan5,SIGNAL;		
+INPUTCLOSE swaitdatamanScan5,SIGNAL;	
+
+LBL p6;
+IF (sID="sdatamanScan6")(GOTO p7);
+
+INPUTCLOSE sdatamanScan6,SIGNAL;		
+INPUTCLOSE swaitdatamanScan6,SIGNAL;	
+
+LBL p7;
+IF (sID="sdatamanScan7")(GOTO p8);
+
+INPUTCLOSE sdatamanScan7,SIGNAL;		
+INPUTCLOSE swaitdatamanScan7,SIGNAL;	
+
+LBL p8;
+IF (sID="sdatamanScan8")(GOTO p9);
+
+INPUTCLOSE sdatamanScan8,SIGNAL;		
+INPUTCLOSE swaitdatamanScan8,SIGNAL;	
+
+LBL p9;
+IF (sID="sdatamanScan9")(GOTO p10);
+
+INPUTCLOSE sdatamanScan9,SIGNAL;		
+INPUTCLOSE swaitdatamanScan9,SIGNAL;	
+
+LBL p10
+
+
+
+
+;sets up swaitID to appropriate swaitdatamanScanx
+IF (sID="sdatamanScan0")(VAR swaitID="swaitdatamanScan0");
+IF (sID="sdatamanScan1")(VAR swaitID="swaitdatamanScan1");
+IF (sID="sdatamanScan2")(VAR swaitID="swaitdatamanScan2");
+IF (sID="sdatamanScan3")(VAR swaitID="swaitdatamanScan3");
+IF (sID="sdatamanScan4")(VAR swaitID="swaitdatamanScan4");
+IF (sID="sdatamanScan5")(VAR swaitID="swaitdatamanScan5");
+IF (sID="sdatamanScan6")(VAR swaitID="swaitdatamanScan6");
+IF (sID="sdatamanScan7")(VAR swaitID="swaitdatamanScan7");
+IF (sID="sdatamanScan8")(VAR swaitID="swaitdatamanScan8");
+IF (sID="sdatamanScan9")(VAR swaitID="swaitdatamanScan9");
+IF (sID="none")(VAR swaitID="sAlwaysReady");
+
+
+IF (sScannerPort="")(VAR nScannerPort="23");
+IF (sScannerPort!"")(VAR nScannerPort=sScannerPort);
+STRTONUM nScannerPort;
+
+IF (sTimeout="")(VAR nTimeout="10000");
+IF (sTimeout!"")(VAR nTimeout=sTimeout);
+STRTONUM nTimeout;
+
+IF (sCommunicationCheck="")(VAR nCommunicationCheck="60");
+IF (sCommunicationCheck!"")(VAR nCommunicationCheck=sCommunicationCheck);
+STRTONUM nCommunicationCheck;
+
+
+
+
+
+
+VAR sMsg="Debug mode is on\n-------->IPAdress:Port= "+sIPAddress+":"+sScannerPort+"\n-------->nTimeout= "+numtostr(nTimeout)+"";
+IF (debug="debug")(VAR STATUS=sMsg);
+
+TM 1,"DISCONNECT";
+FLUSH;
+
+
+GOTO pConnect; Skips the disconnected stuff
+
+
+;****************************************************************************************
+LBL pDisconnected;   If scanner and script become disconnected 
+
+IF (CONNECTION="CONNECTED")(TM 1,"DISCONNECT"); does this need to be here?
+WAIT 10;
+
+INC nReconnectCounter;
+
+LBL pToManyReconnects;
+IF (nreadCounter>3)(MSG_ACK "Dataman Scanner at "+sIPAddress+" has had too many reconnects check scanner and restart PAMA.");  --------stops the script after 3 reconnect attempts
+IF (nreadCounter>3)(GOTO pToManyReconnects);
+
+VAR STATUS="Scanner disconnected attempting to reconnect.";
+
+;eof pDisconnected
+
+
+;****************************************************************************************
+;connect to the camera
+;
+
+LBL pConnect;
+
+
+;TM 1,"DISCONNECT";  moving this to before LBL pConnect 
+WAIT 20;
+
+VAR STATUS = "Connecting to "+sIPAddress;
+
+
+IF (CONNECTION!"CONNECTED")(TM 3,"CONNECT",sIPAddress,nScannerPort);				--> Initialize Communication with Dataman scanner
+
+
+
+WAIT 10;
+IF (CONNECTION = "CONNECTED")(VAR STATUS = "Cognex connected succesfully");
+IF (CONNECTION = "CONNECTED")(GOTO pconnectedSuccesfully);
+MSG_ACK "FAILED TO CONNECT WITH Cognex INTERFACE With IP:"+sIPAddress+" - \n    Hit OK to try again";
+GOTO pConnect;   Trys the connection again
+
+
+
+
+LBL pconnectedSuccesfully;eof pConnect
+;****************************************************************************************
+
+
+VAR TIMEOUT = nTimeout;
+
+VAR ncounter=0;
+VAR nreadCounter=0;
+
+;****************************************************************************************
+;****************************************************************************************
+;the main loop
+LBL theLoop;
+
+;****************************************************************************************
+;pReady
+;this checks to see if the master script is ready to receive a value
+LBL pReady;
+
+VAR runMSG="VAR STATUS="+swaitID+";";
+IF (debug="debug")(RUN runMSG);
+
+
+IF (sIsSlave="FALSE")(GOTO pReadLoop);    Skips straight to the Read loop if this script is not a slave.
+
+
+
+VAR runMSG="WAITFORANY whichevent,nTimeout,"+swaitID+";";swaitdatamanScan0;   Waits for signal to send next scan
+RUN runMSG;
+
+VAR runMSG="VAR STATUS="+swaitID+";";
+IF (debug="debug")(RUN runMSG);
+IF (debug="debug")(VAR STATUS="whichevent="+numtostr(whichevent));
+
+
+VAR runMSG="IF ("+swaitID+"='HOLD')(GOTO pReady);";
+RUN runMSG;
+
+
+
+VAR runMSG="VAR STATUS="+swaitID+";";
+
+IF (whichevent=1)(IF (debug="debug")(RUN runMSG));
+
+VAR runMSG="IF ("+swaitID+"='HOLD')(GOTO pReady)";
+IF (whichevent=1)(RUN runMSG);
+
+IF (whichevent=1)(GOTO pReadLoop);                                          +-+- if no valid entry in swaitdatamanScan try to read
+
+
+;****************************************************************************************
+;pReadLoop
+;the loop that attempts to read  from the scanner
+LBL pReadLoop;
+
+VAR runMSG="VAR STATUS="+swaitID+";";
+IF (debug="debug")(RUN runMSG);
+
+
+VAR runMSG="IF ("+swaitID+"!'READY')(GOTO pReady);";
+RUN runMSG;
+
+
+VAR TIMEOUT = nTimeout;
+VAR readvalue="";
+R readvalue;
+
+IF (readvalue="")(INC nReadTimeoutCounter);
+IF (readvalue="")(IF (nReadTimeoutCounter=nCommunicationCheck)(GOTO pVerifyConnection));
+
+
+LBL pAfterRead;
+IF (readvalue!"")(VAR STATUS="Read:"+readvalue);
+
+INC ncounter;
+
+IF (sIsSlave="TRUE")(GOTO pSlave);
+;++++++++++++++++++++++
+LBL pFreed;  This happens if this script is not a slave
+
+IF (readvalue="")(GOTO pReadLoopEnd);
+
+IF (readvalue="NR")(GOTO pNR);
+
+LBL pGR; if it reads anything
+INC TGOODREAD;
+VAR RECEIVED=readvalue;
+VAR nCurNoreads=0;  Resets NR counter
+
+
+GOTO pReadLoopEnd
+LBL pNR; if the readvalue is "NR"
+
+INC TNOREAD;
+INC nCurNoreads;
+VAR STATUS ="Received a NR:"+numtostr(nCurNoreads);
+
+IF (sAlarmNR="TRUE")(IF (nCurNoreads>MAXNOREAD)(MSG_ACK "Excessive NR"));
+IF (sAlarmNR="TRUE")(IF (nCurNoreads>MAXNOREAD)(VAR nCurNoreads=0));
+
+GOTO pReadLoopEnd; Goes to the end of the readloop
+;++++++++++++++++++++++
+LBL pSlave;   this happens if this script is a slave
+
+
+VAR runMSG="VAR "+swaitID+"='HOLD'";
+IF (readvalue!"")(RUN runMSG);             +-+-Makes this script wait until master script is ready for another scan
+
+IF (readvalue!"")(INC nreadCounter);
+
+VAR runMSG="VAR "+sID+"=readvalue";
+IF (readvalue!"")(RUN runMSG);
+
+
+;++++++++++++++++++++++
+LBL pReadLoopEnd;
+
+IF (readvalue!"")(VAR nReadTimeoutCounter=0);  resets the communication check counter
+
+IF (debug="debug")(IF (readvalue!"")(VAR STATUS = "RUN VAR "+sID+"="+readvalue));
+
+IF (readvalue!"")(GOTO pReady);
+
+
+
+
+IF (debug="debug")(VAR STATUS ="++++++pReadLoop++++++ncounter:("+numtostr(ncounter)+")   nreadCounter: "+numtostr(nreadCounter)+"   nReadTimeoutCounter:"+numtostr(nReadTimeoutCounter));
+
+
+IF (CONNECTION="DISCONNECTED")(GOTO pDisconnected);
+
+GOTO pReadLoop;  eof pReadLoop
+;****************************************************************************************
+;eof main loop
+;****************************************************************************************
+
+
+;****************************************************************************************
+;functions
+;****************************************************************************************
+;pVerifyConnection
+;This will check the connection to the Scanner by asking for its IP address
+
+LBL pVerifyConnection;     
+
+IF (debug="debug")(VAR STATUS="Checking communication with Scanner");
+
+VAR nReadTimeoutCounter=0;  resets the counter
+
+VAR TIMEOUT = 0;
+VAR readvalue="";
+R readvalue;           verifies nothing has been sent
+
+IF (readvalue!"")(GOTO pAfterRead);
+
+
+
+T "||>GET NET-LOCAL.IP-ADDRESS\r\n";     Asks the scanner for its ip address
+WAIT 10;
+
+VAR TIMEOUT = 1000;
+VAR readvalue="";
+R readvalue;
+
+IF (debug="debug")(IF (readvalue!"")(VAR STATUS="Scanner response:"+readvalue));
+IF (debug="debug")(IF (readvalue="")(VAR STATUS="Scanner did not respond"));
+
+
+
+
+
+IF (readvalue=sIPAddress)(VAR STATUS="Camera connection verified");
+IF (readvalue=sIPAddress)(GOTO pVerifyConnectionEnd);                     Valid connection
+
+IF (readvalue!"")(VAR STATUS="!!!!!!!!!!Received something, but not the expected IP address.  This will likely cause a mismatch!!!!!!!!!!"); [fix]
+IF (readvalue!"")(GOTO pAfterRead); This is a highly unlikely, but possible event which will cause a false mismatch. [DSR]
+
+IF (readvalue="")(MSG_ACK "Scanner disconnected press OK to attempt to reconnect.");
+IF (readvalue="")(GOTO pDisconnected);
+
+
+LBL pVerifyConnectionEnd;
+VAR TIMEOUT = nTimeout;
+
+GOTO pReady;  eof pVerifyConnection
+;****************************************************************************************
+
+
+
+;****************************************************************************************
+;eof functions
+;****************************************************************************************
+
+
+
+
+
+LBL theend;
+VAR RECEIVED="Script Complete";
+END;
+
+
+;***********************************************************
+;**** Error handler subroutine                           ***
+;****    Will latch every time there is a runtime error  ***
+;****    in the script preventing PAMA from continuing to***
+;****    run while a script is dead.                     ***
+;***********************************************************
+LBL _ERRORHANDLER, sMessage, nNumber;
+LBL latch;
+VAR STATUS="Run Time Error: "+sMessage;
+VAR sMessage="SYSTEM FAULT   "+sMessage;
+MSG_ACK sMessage;
+GOTO latch;

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<VariableArchive>
+<Channel Name="Global"/>
+<Channel Name="*Master Script*">
+<Var Name="sVersionReporter">"&amp;PAMA_MSF=20050401"</Var>
+</Channel>
+<Channel Name="scanner"/>
+<Channel Name="breaker"/>
+<Channel Name="does stuff"/>
+</VariableArchive>

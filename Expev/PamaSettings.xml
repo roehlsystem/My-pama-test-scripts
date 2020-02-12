@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- To view this file in Internet Explorer or Firefox make sure the -->
+<!-- PamaSettings.xslt file is in the same directory as PamaSettings.xml -->
+<?xml-stylesheet type="text/xsl" href="pamasettings.xslt"?>
+<PamaSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="PamaSettings.xsd" System_Name="" Date_Recorded="2020-02-11T22:03:20Z" Version="1.0.0.0">
+<Channel_Properties Version="12">
+<Channel Name="*Master Script*">
+<Group Type="Script">
+<Identifier>Pama.msf</Identifier>
+</Group>
+<Setting Name="Enabled">true</Setting>
+<Setting Name="Displayable">false</Setting>
+<Setting Name="MaxNoread">10</Setting>
+<Setting Name="StopOutputName"/>
+<Setting Name="ComponentClass"/>
+<Setting Name="Unit"/>
+<Setting Name="UnitIndex"/>
+<Group Type="Device">
+<Identifier>EMAIL</Identifier>
+</Group>
+<Setting Visible="false" Name="MasterScript">true</Setting>
+<Setting Visible="false" Name="ChannelIdent">Chan_2aMaster_Script_2a</Setting>
+</Channel>
+<Channel Name="scanner">
+<Group Type="Script">
+<Identifier>genericdatamanscannerv2_3.psf</Identifier>
+<Setting Name="Is this script a slave?">TRUE</Setting>
+<Setting Name="Scanner port"/>
+<Setting Name="Debug mode">debug</Setting>
+<Setting Name="What variable name to use to transfer data">sdatamanScan0</Setting>
+<Setting Name="Alarm for NRs">FALSE</Setting>
+<Setting Name="Communication check frequency.">10</Setting>
+<Setting Name="IP address">10.20.33.33</Setting>
+<Setting Name="Read timeout(in ms)"/>
+</Group>
+<Setting Name="Enabled">true</Setting>
+<Setting Name="Displayable">true</Setting>
+<Setting Name="MaxNoread">10</Setting>
+<Setting Name="StopOutputName"/>
+<Setting Name="ComponentClass"/>
+<Setting Name="Unit"/>
+<Setting Name="UnitIndex"/>
+<Group Type="Device">
+<Identifier>IP CLIENT</Identifier>
+<Setting Name="UDPProtocol">false</Setting>
+<Setting Name="IPBinaryMode">false</Setting>
+<Setting Name="HostIPAddress">10.20.33.240</Setting>
+</Group>
+<Setting Visible="false" Name="MasterScript">false</Setting>
+<Setting Visible="false" Name="ChannelIdent">scanner</Setting>
+</Channel>
+<Channel Name="breaker">
+<Group Type="Script">
+<Identifier>breakstuff.psf</Identifier>
+</Group>
+<Setting Name="Enabled">true</Setting>
+<Setting Name="Displayable">true</Setting>
+<Setting Name="MaxNoread">10</Setting>
+<Setting Name="StopOutputName"/>
+<Setting Name="ComponentClass"/>
+<Setting Name="Unit"/>
+<Setting Name="UnitIndex"/>
+<Group Type="Device">
+<Identifier>IP CLIENT</Identifier>
+<Setting Name="UDPProtocol">false</Setting>
+<Setting Name="IPBinaryMode">false</Setting>
+<Setting Name="HostIPAddress">10.20.33.240</Setting>
+</Group>
+<Setting Visible="false" Name="MasterScript">false</Setting>
+<Setting Visible="false" Name="ChannelIdent">breaker</Setting>
+</Channel>
+<Channel Name="does stuff">
+<Group Type="Script">
+<Identifier>doesimportantstuff.psf</Identifier>
+<Setting Name="eeprom"/>
+<Setting Name="SimStatus">DEBUG</Setting>
+<Setting Name="mode">DEFAULT</Setting>
+<Setting Name="FileName"/>
+<Setting Name="PenData1"/>
+<Setting Name="PenData2"/>
+<Setting Name="ip address"/>
+<Setting Name="percent">OFF</Setting>
+</Group>
+<Setting Name="Enabled">true</Setting>
+<Setting Name="Displayable">true</Setting>
+<Setting Name="MaxNoread">10</Setting>
+<Setting Name="StopOutputName"/>
+<Setting Name="ComponentClass"/>
+<Setting Name="Unit"/>
+<Setting Name="UnitIndex"/>
+<Group Type="Device">
+<Identifier/>
+</Group>
+<Setting Visible="false" Name="MasterScript">false</Setting>
+<Setting Visible="false" Name="ChannelIdent">does_stuff</Setting>
+</Channel>
+</Channel_Properties>
+<IO_Setup Version="6">
+<Point Name="eIBypass">
+<Setting Name="IOType">Input</Setting>
+<Group Type="IODevice">
+<Identifier>OPC</Identifier>
+<Setting Name="ItemId">Channel1.Device1.fakebypass</Setting>
+</Group>
+<Group Visible="false" Type="CreatorChannels">
+<Identifier/>
+<Setting Name="0">*Master Script*</Setting>
+</Group>
+<Setting Visible="false" Name="Locked">true</Setting>
+<Setting Visible="false" Name="Predefined">false</Setting>
+</Point>
+<Point Name="eOGreenLight">
+<Setting Name="IOType">Output</Setting>
+<Group Type="IODevice">
+<Identifier>OPC</Identifier>
+<Setting Name="ItemId">Channel1.Device1.fakegreenlight</Setting>
+</Group>
+<Group Visible="false" Type="CreatorChannels">
+<Identifier/>
+<Setting Name="0">*Master Script*</Setting>
+</Group>
+<Setting Visible="false" Name="Locked">true</Setting>
+<Setting Visible="false" Name="Predefined">false</Setting>
+</Point>
+<Point Name="StackLight">
+<Setting Name="IOType">Output</Setting>
+<Group Type="IODevice">
+<Identifier>OPC</Identifier>
+<Setting Name="ItemId">Channel1.Device1.somethingfake</Setting>
+</Group>
+<Group Visible="false" Type="CreatorChannels">
+<Identifier/>
+</Group>
+<Setting Visible="false" Name="Locked">true</Setting>
+<Setting Visible="false" Name="Predefined">true</Setting>
+</Point>
+<Point Name="Heartbeat">
+<Setting Name="IOType">Output</Setting>
+<Group Type="IODevice">
+<Identifier>OPC</Identifier>
+<Setting Name="ItemId">Channel1.Device1.fakeheart</Setting>
+</Group>
+<Group Visible="false" Type="CreatorChannels">
+<Identifier/>
+</Group>
+<Setting Visible="false" Name="Locked">true</Setting>
+<Setting Visible="false" Name="Predefined">true</Setting>
+</Point>
+<Point Name="BypassLight">
+<Setting Name="IOType">Output</Setting>
+<Group Type="IODevice">
+<Identifier>OPC</Identifier>
+<Setting Name="ItemId">Channel1.Device1.fakebypasslight</Setting>
+</Group>
+<Group Visible="false" Type="CreatorChannels">
+<Identifier/>
+</Group>
+<Setting Visible="false" Name="Locked">true</Setting>
+<Setting Visible="false" Name="Predefined">true</Setting>
+</Point>
+</IO_Setup>
+<Registry Version="1">
+<Group Type="Logging">
+<Setting Name="LogLocal">c:\data\log</Setting>
+<Setting Name="LogNet">c:\pkg\log</Setting>
+<Setting Name="LogInterval">1800</Setting>
+<Setting Name="LotLocal">c:\data\lot</Setting>
+<Setting Name="LotNet">c:\pkg\lot</Setting>
+<Setting Name="LotInterval">1800</Setting>
+<Setting Name="StatusPath">c:\pkg\status</Setting>
+<Setting Name="StatusInterval">300</Setting>
+<Setting Name="DiagnoseLocal">c:\data\recall</Setting>
+<Setting Name="DiagnoseNet">c:\pkg\recall</Setting>
+</Group>
+<Group Type="Mail">
+<Setting Name="FullName"/>
+<Setting Name="ReturnAddress"/>
+<Setting Name="AdminAddress"/>
+<Setting Name="Pop3Host"/>
+<Setting Name="Pop3UserName"/>
+<Setting Visible="false" Name="Pop3Password"/>
+<Setting Name="Pop3AuthType">false</Setting>
+<Setting Name="SmtpHost"/>
+<Setting Name="SmtpUserName"/>
+<Setting Visible="false" Name="SmtpPassword"/>
+<Setting Name="SmtpAuthType">false</Setting>
+<Setting Name="Pop3ReadInterval">10</Setting>
+<Setting Name="Pop3DownloadLimit">20</Setting>
+<Setting Name="EmailFolder">Inbox</Setting>
+<Setting Name="AttachmentFolder">Attachments</Setting>
+</Group>
+<Group Type="Display">
+<Setting Name="RecAutoClear">1,20</Setting>
+</Group>
+<Group Type="Product">
+<Setting Name="CfgDirectory">cfg</Setting>
+<Setting Name="CfgNameFileDir">c:\Program Files\Hewlett-Packard IJBU\Pama</Setting>
+<Setting Name="ProductStagingEnabled">false</Setting>
+</Group>
+<Group Type="Settings">
+<Setting Name="DataDirectory">c:\data</Setting>
+<Setting Name="ScriptDirectory">Scripts</Setting>
+<Setting Name="ClientDomain"/>
+<Setting Name="ServerPort">715</Setting>
+<Setting Name="OpcRemoteNode"/>
+<Setting Name="OpcClsid">{7BC0CC8E-482C-47CA-ABDC-0FE7F9C6E729}</Setting>
+<Setting Name="OpcDefaultTopic"/>
+<Setting Name="RSLinxDriverName">SC-EXPEV</Setting>
+<Setting Name="OpcUserType">KEPServerEX 6.4</Setting>
+<Setting Name="OpcUpdateRate">1490</Setting>
+<Setting Name="HeartbeatInterval">500</Setting>
+</Group>
+<Group Type="UserSettings">
+<Setting Name="CurrentCfg">cfg\PamaCfg.xml</Setting>
+<Setting Name="CurrentProduct">3YP03BL</Setting>
+<Setting Name="LineType">1,0</Setting>
+<Setting Name="PurgeLogCkBox">0,0</Setting>
+</Group>
+</Registry>
+<Users Version="1">
+<Pama_User Name="zz">
+<Setting Name="Level">Administrator</Setting>
+<Setting Visible="false" Name="Password">******</Setting>
+</Pama_User>
+</Users>
+</PamaSettings>
